@@ -1,0 +1,26 @@
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,env
+  endpoint:
+    health:
+      show-details: always
+      probes:
+        enabled: true
+
+spring:
+  r2dbc:
+    url: r2dbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:crediya_soli}
+    username: ${DB_USER:crediya}
+    password: ${DB_PASSWORD:crediya}
+
+# Propiedades usadas por el driven-adapter R2DBC del scaffold
+adapters:
+  r2dbc:
+    host: ${DB_HOST:localhost}
+    port: ${DB_PORT:5432}
+    database: ${DB_NAME:crediya_soli}
+    schema: ${DB_SCHEMA:public}
+    username: ${DB_USER:crediya}
+    password: ${DB_PASSWORD:crediya}
