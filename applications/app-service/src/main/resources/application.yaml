@@ -11,12 +11,12 @@ spring:
       path: "/h2"
   profiles:
     include: null
-  security:
-    oauth2:
-      resourceserver:
-        jwt:
-          issuer-uri: "https://idp.example.com/issuer"
-          client-id: "myclientid"
+  #security:
+  #  oauth2:
+  #    resourceserver:
+  #      jwt:
+  #        issuer-uri: "https://idp.example.com/issuer"
+  #        client-id: "myclientid"
 jwt:
   json-exp-roles: "/roles"
 management:

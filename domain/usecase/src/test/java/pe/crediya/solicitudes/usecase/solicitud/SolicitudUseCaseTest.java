@@ -12,6 +12,7 @@ import pe.crediya.solicitudes.model.estado.Estado;
 import pe.crediya.solicitudes.model.estado.gateways.EstadoRepository;
 import pe.crediya.solicitudes.model.exception.BusinessException;
 import pe.crediya.solicitudes.model.solicitud.Solicitud;
+import pe.crediya.solicitudes.model.solicitud.SolicitudDetalle;
 import pe.crediya.solicitudes.model.solicitud.gateways.SolicitudRepository;
 import pe.crediya.solicitudes.model.tipoprestamo.TipoPrestamo;
 import pe.crediya.solicitudes.model.tipoprestamo.gateways.TipoPrestamoRepository;
@@ -20,6 +21,7 @@ import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -287,6 +289,75 @@ public class SolicitudUseCaseTest {
         verifyNoMoreInteractions(solicitudRepository);
     }
 
+    // ---------------- listarPendientesRevision()
+    @Test
+    @DisplayName("listarPendientesRevision(): OK con estados válidos y paginación")
+    void listarPendientesRevision_ok() {
+        var det1 = solicitudDetalle(1L, "a@a.com", "PENDIENTE");
+        var det2 = solicitudDetalle(2L, "b@b.com", "REVISION_MANUAL");
+
+        when(solicitudRepository.findSolicitudesByEstados(List.of("PENDIENTE","REVISION_MANUAL")))
+                .thenReturn(Flux.just(det1, det2));
+        when(solicitudRepository.countByEstados(List.of("PENDIENTE", "REVISION_MANUAL")))
+                .thenReturn(Mono.just(2L));
+
+        StepVerifier.create(solicitudUseCase.listarPendientesRevision(
+                        List.of("PENDIENTE", "REVISION_MANUAL"), 0, 10))
+                .expectNextMatches(response -> {
+                    assertEquals(2, response.getContent().size());
+                    assertEquals(0, response.getPage());
+                    assertEquals(10, response.getSize());
+                    assertEquals(2L, response.getTotalElements());
+                    assertEquals(1, response.getTotalPages());
+                    return true;
+                })
+                .verifyComplete();
+
+        verify(solicitudRepository).findSolicitudesByEstados(List.of("PENDIENTE", "REVISION_MANUAL"));
+        verify(solicitudRepository).countByEstados(List.of("PENDIENTE", "REVISION_MANUAL"));
+        verifyNoMoreInteractions(solicitudRepository);
+        verifyNoInteractions(tipoPrestamoRepository, estadoRepository);
+    }
+
+    @Test
+    @DisplayName("listarPendientesRevision(): estadosFiltro vacío → BusinessException")
+    void listarPendientesRevision_filtroVacio() {
+        StepVerifier.create(solicitudUseCase.listarPendientesRevision(List.of(), 0, 10))
+                .expectErrorSatisfies(ex -> {
+                    assertTrue(ex instanceof BusinessException);
+                    var be = (BusinessException) ex;
+                    assertEquals(ErrorCode.VALIDATION_ERROR, be.getCode());
+                    assertTrue(be.getMessage().toLowerCase().contains("estado"));
+                })
+                .verify();
+
+        verifyNoInteractions(solicitudRepository, tipoPrestamoRepository, estadoRepository);
+    }
+
+    @Test
+    @DisplayName("listarPendientesRevision(): parámetros de paginación inválidos → BusinessException")
+    void listarPendientesRevision_paginacionInvalida() {
+        StepVerifier.create(solicitudUseCase.listarPendientesRevision(List.of("PENDIENTE", "REVISION_MANUAL"), -1, 10))
+                .expectErrorSatisfies(ex -> {
+                    assertTrue(ex instanceof BusinessException);
+                    var be = (BusinessException) ex;
+                    assertEquals(ErrorCode.VALIDATION_ERROR, be.getCode());
+                    assertTrue(be.getMessage().toLowerCase().contains("parámetros de paginación inválidos"));
+                })
+                .verify();
+
+        StepVerifier.create(solicitudUseCase.listarPendientesRevision(List.of("PENDIENTE", "REVISION_MANUAL"), 0, 0))
+                .expectErrorSatisfies(ex -> {
+                    assertTrue(ex instanceof BusinessException);
+                    var be = (BusinessException) ex;
+                    assertEquals(ErrorCode.VALIDATION_ERROR, be.getCode());
+                    assertTrue(be.getMessage().toLowerCase().contains("parámetros de paginación inválidos"));
+                })
+                .verify();
+
+        verifyNoInteractions(solicitudRepository, tipoPrestamoRepository, estadoRepository);
+    }
+
     // ------- helpers
     private Solicitud solicitudValida(Long id, BigDecimal monto, Integer plazo, String email,
                                       Long idTipoPrestamo, Long idEstado) {
@@ -313,6 +384,21 @@ public class SolicitudUseCaseTest {
 
     private Estado estado(Long id, String nombre) {
         return Estado.builder().idEstado(id).nombre(nombre).descripcion("desc").build();
+    }
+
+    private SolicitudDetalle solicitudDetalle(Long id, String email, String estado) {
+        return SolicitudDetalle.builder()
+                .idSolicitud(id)
+                .monto(new BigDecimal("1000"))
+                .plazo(12)
+                .email(email)
+                .nombreCliente("Cliente " + id)
+                .tipoPrestamo("Personal")
+                .tasaInteres(new BigDecimal("0.15"))
+                .estadoSolicitud(estado)
+                .salarioBase(new BigDecimal("2000"))
+                .montoMensualSolicitud(new BigDecimal("83.33"))
+                .build();
     }
 
 

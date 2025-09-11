@@ -14,6 +14,7 @@ import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
 import java.net.URI;
+import java.util.List;
 
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 
@@ -45,6 +46,19 @@ public class HandlerV1 {
                 .flatMap(s -> ServerResponse.ok().contentType(APPLICATION_JSON).bodyValue(s))
                 .switchIfEmpty(ServerResponse.notFound().build())
                 .doOnError(e -> log.error("Error al obtener solicitud con id {}: {}", idSolicitud, e.getMessage()));
+    }
+
+    public Mono<ServerResponse> listarPendientes(ServerRequest request) {
+        List<String> estados = request.queryParams().getOrDefault("estados",
+                List.of("PENDIENTE", "PREAPROBADO"));
+
+        int page = request.queryParam("page").map(Integer::parseInt).orElse(0);
+        int size = request.queryParam("size").map(Integer::parseInt).orElse(10);
+
+        return solicitudUseCase.listarPendientesRevision(estados, page, size)
+                .flatMap(resp -> ServerResponse.ok()
+                        .contentType(APPLICATION_JSON)
+                        .bodyValue(resp));
     }
 
     @PreAuthorize("hasRole('permissionGET')")

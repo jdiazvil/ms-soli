@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.reactive.function.server.RouterFunction;
 import org.springframework.web.reactive.function.server.RouterFunctions;
 import org.springframework.web.reactive.function.server.ServerResponse;
+import pe.crediya.solicitudes.model.common.PageResponse;
 import pe.crediya.solicitudes.model.solicitud.Solicitud;
 
 import static org.springframework.http.MediaType.APPLICATION_JSON;
@@ -71,6 +72,21 @@ public class RouterRest {
                                     @ApiResponse(responseCode = "404", description = "Solicitud no encontrada")
                             }
                     )
+            ),
+            @RouterOperation(
+                    path = "/api/v1/solicitudes/pendientes",
+                    method = RequestMethod.GET,
+                    beanClass = HandlerV1.class,
+                    beanMethod = "listarPendientes",
+                    operation = @Operation(
+                            operationId = "listarPendientes",
+                            summary = "Listar solicitudes pendientes",
+                            description = "Devuelve lista paginada y filtrada de solicitudes",
+                            responses = {
+                                    @ApiResponse(responseCode = "200", description = "Listado paginado",
+                                            content = @Content(schema = @Schema(implementation = PageResponse.class)))
+                            }
+                    )
             )
     })
     public RouterFunction<ServerResponse> routerFunction(HandlerV1 handlerV1, HandlerV2 handlerV2) {
@@ -79,6 +95,7 @@ public class RouterRest {
             .path("/api/v1", builder -> builder
                 .POST("/solicitudes", accept(APPLICATION_JSON), handlerV1::crearSolicitud)
                 .GET("/solicitudes/{id}", accept(APPLICATION_JSON), handlerV1::obtenerSolicitudPorId)
+                .GET("/solicitudes",accept(APPLICATION_JSON),handlerV1::listarPendientes)
             )
             /*
             .path("/api/v2", builder -> builder.GET("/usecase/path", handlerV2::listenGETUseCase).POST("/usecase/otherpath", handlerV2::listenPOSTUseCase).GET("/otherusercase/path", handlerV2::listenGETOtherUseCase))

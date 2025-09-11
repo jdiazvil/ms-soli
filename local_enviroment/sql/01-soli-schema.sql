@@ -44,7 +44,8 @@ INSERT INTO estados (nombre, descripcion) VALUES
   ('PENDIENTE',   'Pendiente de revisión'),
   ('PREAPROBADO', 'Superó validación automática; pendiente revisión final'),
   ('APROBADO',    'Aprobado por analista'),
-  ('RECHAZADO',   'Rechazado por validación o por analista')
+  ('RECHAZADO',   'Rechazado por validación o por analista'),
+  ('REVISION_MANUAL',   'Pendiente de revisión manual por parte de un asesor')
 ON CONFLICT (nombre) DO NOTHING;
 
 -- Tipos de préstamo

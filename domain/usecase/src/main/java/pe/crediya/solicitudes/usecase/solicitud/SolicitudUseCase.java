@@ -2,10 +2,12 @@ package pe.crediya.solicitudes.usecase.solicitud;
 
 import lombok.RequiredArgsConstructor;
 import pe.crediya.solicitudes.model.common.ErrorCode;
+import pe.crediya.solicitudes.model.common.PageResponse;
 import pe.crediya.solicitudes.model.estado.Estado;
 import pe.crediya.solicitudes.model.estado.gateways.EstadoRepository;
 import pe.crediya.solicitudes.model.exception.BusinessException;
 import pe.crediya.solicitudes.model.solicitud.Solicitud;
+import pe.crediya.solicitudes.model.solicitud.SolicitudDetalle;
 import pe.crediya.solicitudes.model.solicitud.gateways.SolicitudRepository;
 import pe.crediya.solicitudes.model.tipoprestamo.TipoPrestamo;
 import pe.crediya.solicitudes.model.tipoprestamo.gateways.TipoPrestamoRepository;
@@ -13,6 +15,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.regex.Pattern;
 
 @RequiredArgsConstructor
@@ -83,6 +86,43 @@ public class SolicitudUseCase {
                         ErrorCode.VALIDATION_ERROR,
                         "Estado inicial no configurado: " + ESTADO_PENDIENTE_NOMBRE)))
                 .doOnNext(e -> s.setIdEstado(e.getIdEstado()));
+    }
+
+    public Mono<PageResponse<SolicitudDetalle>> listarPendientesRevision(
+            List<String> estadosFiltro, int page, int size) {
+
+        if (estadosFiltro == null || estadosFiltro.isEmpty()) {
+            return Mono.error(new BusinessException(
+                    ErrorCode.VALIDATION_ERROR,
+                    "Debe especificar al menos un estado para filtrar"
+            ));
+        }
+        if (page < 0 || size <= 0) {
+            return Mono.error(new BusinessException(
+                    ErrorCode.VALIDATION_ERROR,
+                    "Parámetros de paginación inválidos"
+            ));
+        }
+
+        int offset = page * size;
+
+        Mono<Long> totalMono = solicitudRepository.countByEstados(estadosFiltro);
+
+        Flux<SolicitudDetalle> pageContent = solicitudRepository.findSolicitudesByEstados(estadosFiltro)
+                .skip(offset)
+                .take(size);
+
+        return totalMono.zipWith(pageContent.collectList(),
+                (total, content) -> {
+                    int totalPages = (int) Math.ceil((double) total / size);
+                    return PageResponse.<SolicitudDetalle>builder()
+                            .content(content)
+                            .page(page)
+                            .size(size)
+                            .totalElements(total)
+                            .totalPages(totalPages)
+                            .build();
+                });
     }
 
     // ---------- Validaciones de dominio

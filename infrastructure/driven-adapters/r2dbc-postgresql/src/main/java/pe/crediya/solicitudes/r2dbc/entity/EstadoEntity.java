@@ -10,7 +10,7 @@ import org.springframework.data.relational.core.mapping.Table;
 @Builder(toBuilder = true)
 @NoArgsConstructor
 @AllArgsConstructor
-@Table("estado")
+@Table("estados")
 public class EstadoEntity {
     @Id
     @Column("id_estado")
