@@ -17,6 +17,8 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Repository
 public class SolicitudReactiveRepositoryAdapter extends ReactiveAdapterOperations<
@@ -65,9 +67,9 @@ public class SolicitudReactiveRepositoryAdapter extends ReactiveAdapterOperation
                 .flatMapMany(detalles -> {
                     if (detalles.isEmpty()) return Flux.empty();
 
-                    List<String> emails = detalles.stream()
+                    Set<String> emails = detalles.stream()
                             .map(SolicitudDetalleEntity::getEmail)
-                            .toList();
+                            .collect(Collectors.toSet());
 
                     return authWebClient.post()
                             .uri("/usuarios/bulk")

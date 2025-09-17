@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.reactive.function.server.RouterFunction;
 import org.springframework.web.reactive.function.server.RouterFunctions;
 import org.springframework.web.reactive.function.server.ServerResponse;
-import pe.crediya.solicitudes.model.common.PageResponse;
+import pe.crediya.solicitudes.model.common.Page;
 import pe.crediya.solicitudes.model.solicitud.Solicitud;
 
 import static org.springframework.http.MediaType.APPLICATION_JSON;
@@ -74,17 +74,17 @@ public class RouterRest {
                     )
             ),
             @RouterOperation(
-                    path = "/api/v1/solicitudes/pendientes",
+                    path = "/api/v1/solicitudes",
                     method = RequestMethod.GET,
                     beanClass = HandlerV1.class,
                     beanMethod = "listarPendientes",
                     operation = @Operation(
                             operationId = "listarPendientes",
-                            summary = "Listar solicitudes pendientes",
+                            summary = "Listar solicitudes por filtro de estados",
                             description = "Devuelve lista paginada y filtrada de solicitudes",
                             responses = {
                                     @ApiResponse(responseCode = "200", description = "Listado paginado",
-                                            content = @Content(schema = @Schema(implementation = PageResponse.class)))
+                                            content = @Content(schema = @Schema(implementation = Page.class)))
                             }
                     )
             )

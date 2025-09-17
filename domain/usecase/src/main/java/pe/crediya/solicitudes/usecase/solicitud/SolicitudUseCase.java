@@ -2,7 +2,7 @@ package pe.crediya.solicitudes.usecase.solicitud;
 
 import lombok.RequiredArgsConstructor;
 import pe.crediya.solicitudes.model.common.ErrorCode;
-import pe.crediya.solicitudes.model.common.PageResponse;
+import pe.crediya.solicitudes.model.common.Page;
 import pe.crediya.solicitudes.model.estado.Estado;
 import pe.crediya.solicitudes.model.estado.gateways.EstadoRepository;
 import pe.crediya.solicitudes.model.exception.BusinessException;
@@ -88,7 +88,7 @@ public class SolicitudUseCase {
                 .doOnNext(e -> s.setIdEstado(e.getIdEstado()));
     }
 
-    public Mono<PageResponse<SolicitudDetalle>> listarPendientesRevision(
+    public Mono<Page<SolicitudDetalle>> listarPendientesRevision(
             List<String> estadosFiltro, int page, int size) {
 
         if (estadosFiltro == null || estadosFiltro.isEmpty()) {
@@ -100,7 +100,7 @@ public class SolicitudUseCase {
         if (page < 0 || size <= 0) {
             return Mono.error(new BusinessException(
                     ErrorCode.VALIDATION_ERROR,
-                    "Parámetros de paginación inválidos"
+                    "Parametros de paginacion invalidos"
             ));
         }
 
@@ -115,7 +115,7 @@ public class SolicitudUseCase {
         return totalMono.zipWith(pageContent.collectList(),
                 (total, content) -> {
                     int totalPages = (int) Math.ceil((double) total / size);
-                    return PageResponse.<SolicitudDetalle>builder()
+                    return Page.<SolicitudDetalle>builder()
                             .content(content)
                             .page(page)
                             .size(size)

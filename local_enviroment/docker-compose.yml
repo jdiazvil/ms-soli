@@ -1,0 +1,48 @@
+name: solicitudes
+services:
+  # Servicio de base de datos Postgres para ms-solicitudes
+  postgres:
+    image: postgres:16-alpine
+    container_name: crediya-postgres-soli
+    env_file:
+      - .env
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata-soli:/var/lib/postgresql/data
+      - ./sql:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - crediya-net
+
+  # Servicio de ms-solicitudes (solicitudes)
+  ms-solicitudes:
+    build:
+      context: ../
+      dockerfile: deployment/Dockerfile
+    container_name: ms-soli
+    ports:
+      - "8081:8081"  # Puerto para ms-solicitudes
+    environment:
+      - SPRING_PROFILES_ACTIVE=local
+      - DB_HOST=crediya-postgres-soli
+      - DB_URL=jdbc:postgresql://crediya-postgres-soli:5432/${POSTGRES_DB}
+      - DB_USER=${POSTGRES_USER}
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+      - MS_AUTH_BASE_URL=http://ms-auth:8080/api/v1
+    depends_on:
+      - postgres
+    networks:
+      - crediya-net
+
+volumes:
+  pgdata-soli:
+
+networks:
+  crediya-net:
+    external: true
+    driver: bridge

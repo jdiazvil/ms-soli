@@ -9,7 +9,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder(toBuilder = true)
-public class PageResponse<T> {
+public class Page<T> {
     private List<T> content;
     private int page;
     private int size;

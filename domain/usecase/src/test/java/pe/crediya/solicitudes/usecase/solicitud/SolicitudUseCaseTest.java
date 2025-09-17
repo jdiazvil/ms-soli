@@ -342,7 +342,7 @@ public class SolicitudUseCaseTest {
                     assertTrue(ex instanceof BusinessException);
                     var be = (BusinessException) ex;
                     assertEquals(ErrorCode.VALIDATION_ERROR, be.getCode());
-                    assertTrue(be.getMessage().toLowerCase().contains("parámetros de paginación inválidos"));
+                    assertTrue(be.getMessage().toLowerCase().contains("parametros de paginacion invalidos"));
                 })
                 .verify();
 
@@ -351,7 +351,7 @@ public class SolicitudUseCaseTest {
                     assertTrue(ex instanceof BusinessException);
                     var be = (BusinessException) ex;
                     assertEquals(ErrorCode.VALIDATION_ERROR, be.getCode());
-                    assertTrue(be.getMessage().toLowerCase().contains("parámetros de paginación inválidos"));
+                    assertTrue(be.getMessage().toLowerCase().contains("parametros de paginacion invalidos"));
                 })
                 .verify();
 
