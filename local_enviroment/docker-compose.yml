@@ -34,6 +34,14 @@ services:
       - DB_USER=${POSTGRES_USER}
       - DB_PASSWORD=${POSTGRES_PASSWORD}
       - MS_AUTH_BASE_URL=http://ms-auth:8080/api/v1
+      # AWS SDK v2 credenciales y región
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=us-east-1
+      # Spring @ConfigurationProperties(prefix="adapter.sqs")
+      - ADAPTER_SQS_REGION=us-east-1
+      - ADAPTER_SQS_QUEUEURL=${SQS_QUEUE_URL}
+      - ADAPTER_SQS_CAPACIDADQUEUEURL=${SQS_QUEUE_URL_1}
     depends_on:
       - postgres
     networks:

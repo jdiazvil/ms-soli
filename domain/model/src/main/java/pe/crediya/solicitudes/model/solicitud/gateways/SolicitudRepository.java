@@ -1,10 +1,13 @@
 package pe.crediya.solicitudes.model.solicitud.gateways;
 
+import pe.crediya.solicitudes.model.capacidad.Capacidad;
+import pe.crediya.solicitudes.model.solicitud.PrestamoActivo;
 import pe.crediya.solicitudes.model.solicitud.Solicitud;
 import pe.crediya.solicitudes.model.solicitud.SolicitudDetalle;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 public interface SolicitudRepository {
@@ -15,4 +18,10 @@ public interface SolicitudRepository {
 
     Flux<SolicitudDetalle> findSolicitudesByEstados(List<String> estados);
     Mono<Long> countByEstados(List<String> estados);
+
+    Mono<Capacidad> findCapacidadByEmail(
+            Solicitud solicitud, BigDecimal tasa,
+            String nombrePrestamo, String correlationId);
+
+    Flux<PrestamoActivo> findPrestamosAprobadosPorEmail(String email);
 }

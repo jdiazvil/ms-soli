@@ -76,6 +76,8 @@ public class AuthorizationJwt implements WebFluxConfigurer {
                             "/swagger-ui.html","/swagger-ui/**").permitAll()
                     .pathMatchers(HttpMethod.POST,"/api/v1/solicitudes").permitAll()
                     .pathMatchers(HttpMethod.GET,"/api/v1/solicitudes").hasRole("ASESOR")
+                    .pathMatchers(HttpMethod.PUT,"/api/v1/solicitud").hasRole("ASESOR")
+                    .pathMatchers(HttpMethod.POST,"/api/v1/calcular-capacidad").permitAll()
                     .anyExchange().authenticated())
             .oauth2ResourceServer(oauth2 ->
                     oauth2.jwt(jwtSpec ->

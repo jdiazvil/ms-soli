@@ -38,3 +38,9 @@ adapters:
     schema: ${DB_SCHEMA:public}
     username: ${DB_USER:crediya}
     password: ${DB_PASSWORD:crediya}
+adapter:
+  sqs:
+    region: us-east-1
+    queueUrl: ${SQS_QUEUE_URL:https://sqs.us-east-1.amazonaws.com/451717806184/crediya-notificaciones}
+    capacidadQueueUrl: ${SQS_QUEUE_URL_1:https://sqs.us-east-1.amazonaws.com/451717806184/crediya-validacion-automatica}
+    #endpoint: http://localhost:4566

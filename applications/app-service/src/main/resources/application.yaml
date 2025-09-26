@@ -11,12 +11,6 @@ spring:
       path: "/h2"
   profiles:
     include: null
-  #security:
-  #  oauth2:
-  #    resourceserver:
-  #      jwt:
-  #        issuer-uri: "https://idp.example.com/issuer"
-  #        client-id: "myclientid"
 jwt:
   json-exp-roles: "/roles"
 management:
@@ -30,13 +24,13 @@ management:
         enabled: true
 springdoc:
   api-docs:
-    path: /v3/api-docs
+    path: "/v3/api-docs"
   swagger-ui:
-    path: /swagger-ui.html
+    path: "/swagger-ui.html"
     disable-swagger-default-url: true
     display-request-duration: true
-    operationsSorter: alpha
-    tagsSorter: alpha
+    operationsSorter: "alpha"
+    tagsSorter: "alpha"
 cors:
   allowed-origins: "http://localhost:4200,http://localhost:8081"
   allowed-methods: "GET,POST,PUT,DELETE,OPTIONS"

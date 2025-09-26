@@ -87,6 +87,34 @@ public class RouterRest {
                                             content = @Content(schema = @Schema(implementation = Page.class)))
                             }
                     )
+            ),
+            @RouterOperation(
+                    path = "/api/v1/solicitud",
+                    method = RequestMethod.PUT,
+                    beanClass = HandlerV1.class,
+                    beanMethod = "cambiarEstado",
+                    operation = @Operation(
+                            operationId = "cambiarEstado",
+                            summary = "Cambiar estado de una solicitud",
+                            description = "Cambia el estado de una solicitud existente. El body debe contener idSolicitud y nuevoEstado.",
+                            security = { @SecurityRequirement(name = "bearer-jwt") },
+                            requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                                    required = true,
+                                    content = @Content(
+                                            mediaType = "application/json",
+                                            schema = @Schema(implementation = HandlerV1.CambiarEstadoRequest.class)
+                                    )
+                            ),
+                            responses = {
+                                    @ApiResponse(responseCode = "200", description = "Estado actualizado",
+                                            content = @Content(schema = @Schema(implementation = Solicitud.class))),
+                                    @ApiResponse(responseCode = "400", description = "Datos inválidos"),
+                                    @ApiResponse(responseCode = "401", description = "No autenticado"),
+                                    @ApiResponse(responseCode = "403", description = "Sin rol adecuado"),
+                                    @ApiResponse(responseCode = "404", description = "Solicitud no existe"),
+                                    @ApiResponse(responseCode = "409", description = "Conflicto de negocio")
+                            }
+                    )
             )
     })
     public RouterFunction<ServerResponse> routerFunction(HandlerV1 handlerV1, HandlerV2 handlerV2) {
@@ -96,6 +124,8 @@ public class RouterRest {
                 .POST("/solicitudes", accept(APPLICATION_JSON), handlerV1::crearSolicitud)
                 .GET("/solicitudes/{id}", accept(APPLICATION_JSON), handlerV1::obtenerSolicitudPorId)
                 .GET("/solicitudes",accept(APPLICATION_JSON),handlerV1::listarPendientes)
+                .PUT("/solicitud", accept(APPLICATION_JSON), handlerV1::cambiarEstado)
+                .POST("/calcular-capacidad", accept(APPLICATION_JSON),handlerV2::callbackCapacidad)
             )
             /*
             .path("/api/v2", builder -> builder.GET("/usecase/path", handlerV2::listenGETUseCase).POST("/usecase/otherpath", handlerV2::listenPOSTUseCase).GET("/otherusercase/path", handlerV2::listenGETOtherUseCase))

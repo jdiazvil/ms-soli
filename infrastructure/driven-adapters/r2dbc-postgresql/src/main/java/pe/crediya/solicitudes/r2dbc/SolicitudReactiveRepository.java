@@ -3,6 +3,7 @@ package pe.crediya.solicitudes.r2dbc;
 import org.springframework.data.r2dbc.repository.Query;
 import org.springframework.data.repository.query.ReactiveQueryByExampleExecutor;
 import org.springframework.data.repository.reactive.ReactiveCrudRepository;
+import pe.crediya.solicitudes.r2dbc.dto.PrestamoActivoEntity;
 import pe.crediya.solicitudes.r2dbc.dto.SolicitudDetalleEntity;
 import pe.crediya.solicitudes.r2dbc.entity.SolicitudEntity;
 import reactor.core.publisher.Flux;
@@ -30,4 +31,16 @@ public interface SolicitudReactiveRepository extends ReactiveCrudRepository<Soli
     ON s.id_estado = e.id_estado
     WHERE e.nombre IN (:estados)""")
     Mono<Long> countByEstados(List<String> estados);
+
+    @Query("""
+    SELECT s.monto,
+           s.plazo            AS plazo_meses,
+           tp.tasa_interes    AS tasa_interes_porcentaje
+    FROM solicitud s
+    JOIN estados e         ON e.id_estado = s.id_estado
+    JOIN tipo_prestamo tp  ON tp.id_tipo_prestamo = s.id_tipo_prestamo
+    WHERE s.email = :email
+      AND UPPER(e.nombre) = 'APROBADO'
+    """)
+    Flux<PrestamoActivoEntity> findPrestamosAprobadosByEmail(String email);
 }

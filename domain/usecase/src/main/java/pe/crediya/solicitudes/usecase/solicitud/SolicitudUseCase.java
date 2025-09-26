@@ -1,10 +1,14 @@
 package pe.crediya.solicitudes.usecase.solicitud;
 
 import lombok.RequiredArgsConstructor;
+import pe.crediya.solicitudes.model.capacidad.Capacidad;
+import pe.crediya.solicitudes.model.capacidad.gateways.CapacidadRepository;
 import pe.crediya.solicitudes.model.common.ErrorCode;
 import pe.crediya.solicitudes.model.common.Page;
 import pe.crediya.solicitudes.model.estado.Estado;
 import pe.crediya.solicitudes.model.estado.gateways.EstadoRepository;
+import pe.crediya.solicitudes.model.estadocambiadoevent.EstadoCambiadoEvent;
+import pe.crediya.solicitudes.model.estadocambiadoevent.gateways.EstadoCambiadoEventRepository;
 import pe.crediya.solicitudes.model.exception.BusinessException;
 import pe.crediya.solicitudes.model.solicitud.Solicitud;
 import pe.crediya.solicitudes.model.solicitud.SolicitudDetalle;
@@ -15,7 +19,9 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.regex.Pattern;
 
 @RequiredArgsConstructor
@@ -23,21 +29,32 @@ public class SolicitudUseCase {
     private final SolicitudRepository solicitudRepository;
     private final TipoPrestamoRepository tipoPrestamoRepository;
     private final EstadoRepository estadoRepository;
+    private final EstadoCambiadoEventRepository eventRepository;
+    private final CapacidadRepository capacidadRepository;
 
     private static final Pattern EMAIL_REGEX =
             Pattern.compile("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$");
     private static final String ESTADO_PENDIENTE_NOMBRE = "PENDIENTE"; //Pendiente de revisión
 
-    public Mono<Solicitud> crear(Solicitud s) {
+    public Mono<Solicitud> crear(Solicitud s,String correlationId) {
         return validarCrear(s)
                 .then(
                     Mono.defer(() ->
                         tipoPrestamoRepository.findById(s.getIdTipoPrestamo())
                                 .switchIfEmpty(Mono.error(new BusinessException(
                                         ErrorCode.VALIDATION_ERROR, "Tipo de préstamo no existe")))
-                                .flatMap(tp -> validarMontoEnRango(s.getMonto(), tp))
+                                .flatMap(tp -> validarMontoEnRango(s.getMonto(), tp)
                                 .then(Mono.defer(() -> resolverEstadoInicial(s)))
                                 .then(Mono.defer(() -> solicitudRepository.save(s)))
+                                .flatMap(savedSolicitud -> {
+                                    if (Boolean.TRUE.equals(tp.getValidacionAutomatica())){
+                                        return solicitudRepository.findCapacidadByEmail(
+                                                savedSolicitud,tp.getTasaInteres(),tp.getNombre(),correlationId)
+                                                .flatMap(capacidadRepository::enviarEvaluacion).thenReturn(savedSolicitud);
+                                    }
+                                    return Mono.just(savedSolicitud);
+                                })
+                        )
                     )
                 );
     }
@@ -74,6 +91,51 @@ public class SolicitudUseCase {
                                 return solicitudRepository.save(s);
                             })
                         )
+                );
+    }
+
+    public Mono<Solicitud> cambiarEstado(Long idSolicitud, String nuevoEstado, String correlationId){
+        if (idSolicitud == null) {
+            return Mono.error(new BusinessException(ErrorCode.VALIDATION_ERROR, "Id de solicitud es requerido"));
+        }
+        if (nuevoEstado == null || nuevoEstado.isBlank()) {
+            return Mono.error(new BusinessException(ErrorCode.VALIDATION_ERROR, "Debe indicar el nuevo estado"));
+        }
+
+        final String upper = nuevoEstado.trim().toUpperCase();
+        final String cid = (correlationId == null || correlationId.isBlank()) ? "n/a" : correlationId;
+        return estadoRepository.findByNombre(upper)
+                .switchIfEmpty(Mono.error(new BusinessException(ErrorCode.VALIDATION_ERROR,
+                        "El estado " + upper + " no existe en la base de datos")))
+                .flatMap(estado -> solicitudRepository.findById(idSolicitud)
+                        .switchIfEmpty(Mono.error(new BusinessException(ErrorCode.VALIDATION_ERROR,
+                                "Solicitud no existe")))
+                        .flatMap(sol -> {
+                            if (Objects.equals(sol.getIdEstado(), estado.getIdEstado())) {
+                                return Mono.just(sol);
+                            }
+                            sol.setIdEstado(estado.getIdEstado());
+                            return solicitudRepository.save(sol)
+                                 .flatMap(saved -> tipoPrestamoRepository.findById(saved.getIdTipoPrestamo())
+                                         .switchIfEmpty(Mono.error(new BusinessException(
+                                                 ErrorCode.VALIDATION_ERROR,"Tipo de prestamo no encontrado"
+                                         )))
+                                         .flatMap(tipoPrestamo -> {
+                                             var evt = EstadoCambiadoEvent.builder()
+                                                     .idSolicitud(saved.getIdSolicitud())
+                                                     .nuevoEstado(upper)
+                                                     .emailSolicitante(saved.getEmail())
+                                                     .monto(saved.getMonto())
+                                                     .tipoPrestamo(tipoPrestamo.getNombre())
+                                                     .fecha(Instant.now())
+                                                     .correlationId(cid)
+                                                     .build();
+                                                     return eventRepository.publicarEstadoCambiado(evt)
+                                                        .onErrorResume(ex -> {return Mono.empty();})
+                                                        .thenReturn(saved);
+                                         })
+                                 );
+                        })
                 );
     }
 

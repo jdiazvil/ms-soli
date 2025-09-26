@@ -1,5 +1,6 @@
 package pe.crediya.solicitudes.api;
 
+import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -29,14 +30,22 @@ public class HandlerV1 {
     public Mono<ServerResponse> crearSolicitud(ServerRequest request) {
         return request.bodyToMono(SolicitudRequest.class)
                 .map(this::toDomain)
-                .flatMap(s -> solicitudUseCase.crear(s).as(tx::transactional))
-                .flatMap(s -> Mono.deferContextual(ctx -> {
-                    String cid = ctx.getOrDefault(CorrelationIdWebFilter.CONTEXT_KEY, "n/a");
-                    log.info("solicitud_creada cid={} id={} monto={}", cid, s.getIdSolicitud(), s.getMonto());
-                    return ServerResponse.created(URI.create("/api/v1/solicitudes/" + s.getIdSolicitud()))
+                .flatMap(s ->
+                        Mono.deferContextual(ctx -> {
+                            String cid = ctx.getOrDefault(CorrelationIdWebFilter.CONTEXT_KEY, "n/a");
+                            return solicitudUseCase.crear(s, cid)
+                                    .as(tx::transactional)
+                                    .map(result -> new Object[] {result, cid});
+                        })
+                )
+                .flatMap(resultAndCid -> {
+                    Solicitud result = (Solicitud) resultAndCid[0];
+                    String cid = (String) resultAndCid[1];
+                    log.info("solicitud_creada cid={} id={} monto={}", cid, result.getIdSolicitud(), result.getMonto());
+                    return ServerResponse.created(URI.create("/api/v1/solicitudes/" + result.getIdSolicitud()))
                             .contentType(APPLICATION_JSON)
-                            .bodyValue(s);
-                }));
+                            .bodyValue(result);
+                });
     }
 
     // HU-2: Obtener solicitud por ID
@@ -59,6 +68,22 @@ public class HandlerV1 {
                 .flatMap(resp -> ServerResponse.ok()
                         .contentType(APPLICATION_JSON)
                         .bodyValue(resp));
+    }
+
+    public Mono<ServerResponse> cambiarEstado(ServerRequest request) {
+        return request.bodyToMono(CambiarEstadoRequest.class)
+                .defaultIfEmpty(new CambiarEstadoRequest(null, null))
+                .flatMap(req ->
+                        Mono.deferContextual(ctx -> {
+                            String correlationId = ctx.getOrDefault(CorrelationIdWebFilter.CONTEXT_KEY,"n/a");
+                            return solicitudUseCase
+                                .cambiarEstado(req.idSolicitud(), req.nuevoEstado(),correlationId)
+                                .as(tx::transactional);
+                        })
+                )
+                .flatMap(s -> ServerResponse.ok()
+                        .contentType(APPLICATION_JSON)
+                        .bodyValue(s));
     }
 
     @PreAuthorize("hasRole('permissionGET')")
@@ -86,6 +111,8 @@ public class HandlerV1 {
             Long id_estado,
             Long id_tipo_prestamo
     ) {}
+
+    public record CambiarEstadoRequest(Long idSolicitud, String nuevoEstado) {}
 
     private Solicitud toDomain(SolicitudRequest r) {
         return Solicitud.builder()

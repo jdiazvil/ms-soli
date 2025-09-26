@@ -7,9 +7,11 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
+import pe.crediya.solicitudes.model.capacidad.gateways.CapacidadRepository;
 import pe.crediya.solicitudes.model.common.ErrorCode;
 import pe.crediya.solicitudes.model.estado.Estado;
 import pe.crediya.solicitudes.model.estado.gateways.EstadoRepository;
+import pe.crediya.solicitudes.model.estadocambiadoevent.gateways.EstadoCambiadoEventRepository;
 import pe.crediya.solicitudes.model.exception.BusinessException;
 import pe.crediya.solicitudes.model.solicitud.Solicitud;
 import pe.crediya.solicitudes.model.solicitud.SolicitudDetalle;
@@ -34,6 +36,10 @@ public class SolicitudUseCaseTest {
     private TipoPrestamoRepository tipoPrestamoRepository;
     @Mock
     private EstadoRepository estadoRepository;
+    @Mock
+    private EstadoCambiadoEventRepository eventRepository;
+    @Mock
+    private CapacidadRepository capacidadRepository;
 
     private SolicitudUseCase solicitudUseCase;
 
@@ -41,7 +47,8 @@ public class SolicitudUseCaseTest {
     void init() {
         MockitoAnnotations.openMocks(this);
         solicitudUseCase = new SolicitudUseCase(
-                solicitudRepository,tipoPrestamoRepository,estadoRepository);
+                solicitudRepository,tipoPrestamoRepository,estadoRepository,
+                eventRepository,capacidadRepository);
     }
 
     // ---------------- crear()
@@ -50,12 +57,13 @@ public class SolicitudUseCaseTest {
     void crear_ok_conEstadoExplicito() {
         var s = solicitudValida(null, new BigDecimal("1000"), 12, "ana@demo.com", 1L, 7L);
         var tp = tpRango(new BigDecimal("500"), new BigDecimal("5000"));
+        tp.setValidacionAutomatica(false);
         var persistida = s.toBuilder().idSolicitud(1L).build();
 
         when(tipoPrestamoRepository.findById(1L)).thenReturn(Mono.just(tp));
         when(solicitudRepository.save(any(Solicitud.class))).thenReturn(Mono.just(persistida));
 
-        StepVerifier.create(solicitudUseCase.crear(s))
+        StepVerifier.create(solicitudUseCase.crear(s,null))
                 .assertNext(x -> {
                     assertEquals(1L, x.getIdSolicitud());
                     assertEquals(7L, x.getIdEstado());
@@ -73,6 +81,7 @@ public class SolicitudUseCaseTest {
     void crear_ok_sinEstado_asignaPendiente() {
         var s = solicitudValida(null, new BigDecimal("1500"), 10, "ana@demo.com", 1L, null);
         var tp = tpRango(new BigDecimal("500"), new BigDecimal("5000"));
+        tp.setValidacionAutomatica(false);
         var estadoPendiente = estado(10L, "PENDIENTE");
 
         when(tipoPrestamoRepository.findById(1L)).thenReturn(Mono.just(tp));
@@ -81,7 +90,7 @@ public class SolicitudUseCaseTest {
         when(solicitudRepository.save(any(Solicitud.class)))
                 .thenAnswer(inv -> Mono.just((Solicitud) inv.getArgument(0)));
 
-        StepVerifier.create(solicitudUseCase.crear(s))
+        StepVerifier.create(solicitudUseCase.crear(s,null))
                 .assertNext(x -> {
                     assertNotNull(x.getIdEstado());
                     assertEquals(10L, x.getIdEstado());
@@ -103,7 +112,7 @@ public class SolicitudUseCaseTest {
 
         when(tipoPrestamoRepository.findById(999L)).thenReturn(Mono.empty());
 
-        StepVerifier.create(solicitudUseCase.crear(s))
+        StepVerifier.create(solicitudUseCase.crear(s,null))
                 .expectErrorSatisfies(ex -> {
                     assertTrue(ex instanceof BusinessException);
                     var be = (BusinessException) ex;
@@ -125,7 +134,7 @@ public class SolicitudUseCaseTest {
 
         when(tipoPrestamoRepository.findById(1L)).thenReturn(Mono.just(tp));
 
-        StepVerifier.create(solicitudUseCase.crear(s))
+        StepVerifier.create(solicitudUseCase.crear(s,null))
                 .expectErrorSatisfies(ex -> {
                     assertTrue(ex instanceof BusinessException);
                     var be = (BusinessException) ex;
@@ -144,19 +153,19 @@ public class SolicitudUseCaseTest {
     void crear_datosInvalidos_basicos() {
         // plazo inválido
         var s1 = solicitudValida(null, new BigDecimal("1000"), 0, "ana@demo.com", 1L, null);
-        StepVerifier.create(solicitudUseCase.crear(s1))
+        StepVerifier.create(solicitudUseCase.crear(s1,null))
                 .expectErrorSatisfies(ex -> assertTrue(ex.getMessage().toLowerCase().contains("plazo")))
                 .verify();
 
         // email inválido
         var s2 = solicitudValida(null, new BigDecimal("1000"), 12, "ana#demo.com", 1L, null);
-        StepVerifier.create(solicitudUseCase.crear(s2))
+        StepVerifier.create(solicitudUseCase.crear(s2,null))
                 .expectErrorSatisfies(ex -> assertTrue(ex.getMessage().toLowerCase().contains("correo")))
                 .verify();
 
         // monto <= 0
         var s3 = solicitudValida(null, new BigDecimal("0"), 12, "ana@demo.com", 1L, null);
-        StepVerifier.create(solicitudUseCase.crear(s3))
+        StepVerifier.create(solicitudUseCase.crear(s3,null))
                 .expectErrorSatisfies(ex -> assertTrue(ex.getMessage().toLowerCase().contains("monto")))
                 .verify();
 
@@ -287,6 +296,75 @@ public class SolicitudUseCaseTest {
         verify(solicitudRepository).findById(1L);
         verifyNoMoreInteractions(estadoRepository);
         verifyNoMoreInteractions(solicitudRepository);
+    }
+
+    //
+    @Test
+    @DisplayName("aprobarORechazar(): cambia estado a APROBADO correctamente")
+    void aprobar_ok() {
+        var solicitud = solicitudValida(1L, BigDecimal.valueOf(1000),2,"abc@gmail.com",1L,1L);
+        var estadoAprobado = new Estado(10L, "APROBADO", "Aprobado por analista");
+        var tipoPrestamo = new TipoPrestamo(1L,"Consumo",new BigDecimal(0),
+                new BigDecimal(100),new BigDecimal(60),Boolean.TRUE);
+
+        when(estadoRepository.findByNombre("APROBADO")).thenReturn(Mono.just(estadoAprobado));
+        when(solicitudRepository.findById(1L)).thenReturn(Mono.just(solicitud));
+        when(solicitudRepository.save(any(Solicitud.class)))
+                .thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+        when(tipoPrestamoRepository.findById(1L)).thenReturn(Mono.just(tipoPrestamo));
+        when(eventRepository.publicarEstadoCambiado(any())).thenReturn(Mono.empty());
+
+        StepVerifier.create(solicitudUseCase.cambiarEstado(1L, "APROBADO",null))
+                .assertNext(s -> {
+                    assertEquals(10L, s.getIdEstado());
+                })
+                .verifyComplete();
+
+        verify(estadoRepository).findByNombre("APROBADO");
+        verify(solicitudRepository).findById(1L);
+        verify(solicitudRepository).save(any(Solicitud.class));
+        verify(tipoPrestamoRepository).findById(1L);
+        verify(eventRepository).publicarEstadoCambiado(any());
+    }
+
+    @Test
+    @DisplayName("cambiarEstado(): estado inválido (no existe en BD) → BusinessException; no toca solicitudRepository")
+    void estado_invalido_noExiste() {
+        // arrange
+        when(estadoRepository.findByNombre("OTRO")).thenReturn(Mono.empty());
+
+        // act + assert
+        StepVerifier.create(solicitudUseCase.cambiarEstado(1L, "OTRO",null))
+                .expectErrorSatisfies(ex -> {
+                    assertTrue(ex instanceof BusinessException);
+                    BusinessException be = (BusinessException) ex;
+                    assertEquals(ErrorCode.VALIDATION_ERROR, be.getCode());
+                    assertTrue(be.getMessage().toLowerCase().contains("no existe"));
+                })
+                .verify();
+
+        // verify: se consulta el estado y NO se toca solicitudRepository
+        verify(estadoRepository, times(1)).findByNombre("OTRO");
+        verifyNoInteractions(solicitudRepository);
+        verifyNoMoreInteractions(estadoRepository);
+    }
+
+    @Test
+    @DisplayName("aprobarORechazar(): solicitud no existe → BusinessException")
+    void solicitud_noExiste() {
+        var estadoRechazado = new Estado(20L, "RECHAZADO", "Rechazado por analista");
+        when(estadoRepository.findByNombre("RECHAZADO")).thenReturn(Mono.just(estadoRechazado));
+        when(solicitudRepository.findById(999L)).thenReturn(Mono.empty());
+
+        StepVerifier.create(solicitudUseCase.cambiarEstado(999L, "RECHAZADO",null))
+                .expectErrorSatisfies(ex -> {
+                    assertTrue(ex instanceof BusinessException);
+                    assertTrue(ex.getMessage().toLowerCase().contains("solicitud no existe"));
+                })
+                .verify();
+
+        verify(estadoRepository).findByNombre("RECHAZADO");
+        verify(solicitudRepository).findById(999L);
     }
 
     // ---------------- listarPendientesRevision()

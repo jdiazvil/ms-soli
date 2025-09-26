@@ -1,6 +1,8 @@
 package pe.crediya.solicitudes.r2dbc;
 
 import org.springframework.web.reactive.function.client.WebClient;
+import pe.crediya.solicitudes.model.capacidad.Capacidad;
+import pe.crediya.solicitudes.model.solicitud.PrestamoActivo;
 import pe.crediya.solicitudes.model.solicitud.Solicitud;
 import pe.crediya.solicitudes.model.solicitud.SolicitudDetalle;
 import pe.crediya.solicitudes.model.solicitud.gateways.SolicitudRepository;
@@ -14,7 +16,9 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
+import java.math.MathContext;
 import java.math.RoundingMode;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -28,6 +32,8 @@ public class SolicitudReactiveRepositoryAdapter extends ReactiveAdapterOperation
         SolicitudReactiveRepository
 > implements SolicitudRepository {
     private final WebClient authWebClient;
+    private static final MathContext MC = new MathContext(12, RoundingMode.HALF_UP);
+    private static final int SCALE2 = 2;
     public SolicitudReactiveRepositoryAdapter(SolicitudReactiveRepository repository,
                                               ObjectMapper mapper,
                                               WebClient authWebClient) {
@@ -106,5 +112,71 @@ public class SolicitudReactiveRepositoryAdapter extends ReactiveAdapterOperation
     @Override
     public Mono<Long> countByEstados(List<String> estados) {
         return repository.countByEstados(estados);
+    }
+
+    @Override
+    public Mono<Capacidad> findCapacidadByEmail(Solicitud solicitud, BigDecimal tasa,
+                                                String nombrePrestamo,String correlationId) {
+        var email = solicitud.getEmail();
+
+        Mono<UsuarioResponse> usuarioMono = authWebClient.get()
+                .uri("/usuario/{email}", email)
+                .retrieve()
+                .bodyToMono(UsuarioResponse.class);
+
+        Mono<BigDecimal> deudaMensualMono = findPrestamosAprobadosPorEmail(email)
+                .map( p -> {
+                    BigDecimal tasaMensualFraccion = (p.getTasaInteresPorcentaje() == null)
+                            ? BigDecimal.ZERO
+                            : p.getTasaInteresPorcentaje().divide(BigDecimal.valueOf(100), MC);
+                    return cuotaMensual(
+                            p.getMonto(),
+                            tasaMensualFraccion,
+                            p.getPlazoMeses()
+                    );
+                })
+                .reduce(BigDecimal.ZERO, (a, b) -> a.add(b, MC))
+                .defaultIfEmpty(BigDecimal.ZERO);
+
+        return usuarioMono.zipWith(deudaMensualMono)
+                .map(tuple -> {
+                    UsuarioResponse u = tuple.getT1();
+                    BigDecimal deudaMensual = tuple.getT2();
+
+                    BigDecimal tasaNuevaFraccion = tasa
+                            .divide(BigDecimal.valueOf(100), MC);
+
+                    return Capacidad.builder()
+                            .idSolicitud(solicitud.getIdSolicitud())
+                            .documento(u.getDocumentoIdentidad())
+                            .ingresoMensual(u.getSalarioBase())
+                            .monto(solicitud.getMonto())
+                            .tasaMensual(tasaNuevaFraccion)
+                            .plazoMeses(solicitud.getPlazo())
+                            .tipoPrestamo(nombrePrestamo)
+                            .deudaMensual(deudaMensual)
+                            .validacionAutomatica(true)
+                            .fecha(Instant.now())
+                            .correlationId(correlationId)
+                            .build();
+                });
+    }
+
+    @Override
+    public Flux<PrestamoActivo> findPrestamosAprobadosPorEmail(String email) {
+        return repository.findPrestamosAprobadosByEmail(email).map(
+                e -> mapper.map(e,PrestamoActivo.class)
+        );
+    }
+
+    private BigDecimal cuotaMensual(BigDecimal P, BigDecimal i, int n) {
+        if (i == null || i.compareTo(BigDecimal.ZERO) <= 0) {
+            return P.divide(BigDecimal.valueOf(n), SCALE2, RoundingMode.HALF_UP);
+        }
+        BigDecimal uno = BigDecimal.ONE;
+        BigDecimal factor = (uno.add(i, MC)).pow(n, MC);
+        BigDecimal num = P.multiply(i, MC).multiply(factor, MC);
+        BigDecimal den = factor.subtract(uno, MC);
+        return num.divide(den, SCALE2, RoundingMode.HALF_UP);
     }
 }
